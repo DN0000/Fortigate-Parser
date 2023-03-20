@@ -1,36 +1,35 @@
 import os
 import json
-import re
 import pandas as pd
 
 def extract_firewall_policies(file_path):
     with open(file_path, 'r') as file:
-        content = file.read()
-
-    config_pattern = re.compile(r'config firewall policy(.*?)end', re.DOTALL)
-    config_contents = config_pattern.findall(content)
+        lines = file.readlines()
 
     policy_list = []
+    policy_dict = None
+    inside_config = False
 
-    for config_content in config_contents:
-        policy_pattern = re.compile(r'(edit.*?next)', re.DOTALL)
-        policies = policy_pattern.findall(config_content)
+    for line in lines:
+        line = line.strip()
 
-        for policy in policies:
-            policy_dict = {}
-            policy_lines = policy.split('\n')
+        if line == "config firewall policy":
+            inside_config = True
+        elif line == "end":
+            inside_config = False
+        elif inside_config:
+            if line.startswith('edit'):
+                if policy_dict:
+                    policy_list.append(policy_dict)
+                policy_id = line.split()[1]
+                policy_dict = {'policyid': policy_id}
+            elif line.startswith('set') and policy_dict:
+                key_value = line.split(' ', 2)[1:]
+                key, value = key_value[0], key_value[1]
+                policy_dict[key] = value
 
-            for line in policy_lines:
-                line = line.strip()
-                if line.startswith('edit'):
-                    policy_id = line.split()[1]
-                    policy_dict['policyid'] = policy_id
-                elif line.startswith('set'):
-                    key_value = line.split(' ', 2)[1:]
-                    key, value = key_value[0], key_value[1]
-                    policy_dict[key] = value
-
-            policy_list.append(policy_dict)
+    if policy_dict:
+        policy_list.append(policy_dict)
 
     return policy_list
 
